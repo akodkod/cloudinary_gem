@@ -242,28 +242,29 @@ module ActiveStorage
       key
     end
 
-    def content_type_to_resource_type(content_type)
-      return 'image' if content_type.nil?
+  def content_type_to_resource_type(content_type)
+    return "raw" if content_type.nil?
 
-      type, subtype = content_type.split('/')
-      case type
-      when 'video', 'audio'
-        'video'
-      when 'text'
-        'raw'
-      when 'application'
-        case subtype
-        when 'pdf', 'postscript'
-          'image'
-        when 'vnd.apple.mpegurl', 'x-mpegurl', 'mpegurl' # m3u8
-          'video'
-        else
-          'raw'
-        end
+    type, subtype = content_type.split("/")
+
+    case type
+    when "video", "audio"
+      "video"
+    when "image"
+      "image"
+    when "application"
+      case subtype
+      when "pdf", "postscript"
+        "image"
+      when "vnd.apple.mpegurl", "x-mpegurl", "mpegurl" # m3u8
+        "video"
       else
-        'image'
+        "raw"
       end
+    else
+      "raw"
     end
+  end
 
     def resource_type(io, key = "", content_type = "")
       if content_type.blank?
