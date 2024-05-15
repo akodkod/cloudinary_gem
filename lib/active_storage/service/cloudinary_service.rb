@@ -249,26 +249,26 @@ module ActiveStorage
     end
 
     def content_type_to_resource_type(content_type)
-      return "raw" if content_type.nil?
+      return 'raw' if content_type.nil?
 
-      type, subtype = content_type.split("/")
+      type, subtype = content_type.split('/')
 
       case type
-      when "video", "audio"
-        "video"
-      when "image"
-        "image"
-      when "application"
+      when 'video', 'audio'
+        'video'
+      when 'image'
+        'image'
+      when 'application'
         case subtype
-        when "pdf", "postscript"
-          "image"
-        when "vnd.apple.mpegurl", "x-mpegurl", "mpegurl" # m3u8
-          "video"
+        when 'pdf', 'postscript'
+          'image'
+        when 'vnd.apple.mpegurl', 'x-mpegurl', 'mpegurl' # m3u8
+          'video'
         else
-          "raw"
+          'raw'
         end
       else
-        "raw"
+        'raw'
       end
     end
 
