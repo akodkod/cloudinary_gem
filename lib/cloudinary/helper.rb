@@ -179,7 +179,7 @@ module CloudinaryHelper
     version_store = options.delete(:version_store)
     if options[:version].blank? && (version_store == :file) && defined?(Rails) && defined?(Rails.root)
       file_name = "#{Rails.root}/tmp/cloudinary/cloudinary_sprite_#{source.sub(/\..*/, '')}.version"
-      if File.exists?(file_name)
+      if File.exist?(file_name)
         options[:version] = File.read(file_name).chomp
       end
     end
@@ -286,13 +286,6 @@ module CloudinaryHelper
     Cloudinary::Utils.private_download_url(public_id, format, options)
   end
 
-  # Helper method that uses the deprecated ZIP download API.
-  # Replaced by cl_download_zip_url that uses the more advanced and robust archive generation and download API
-  # @deprecated
-  def cl_zip_download_url(tag, options = {})
-    Cloudinary::Utils.zip_download_url(tag, options)
-  end
-
   # @see {Cloudinary::Utils.download_archive_url}
   def cl_download_archive_url(options = {})
     Cloudinary::Utils.download_archive_url(options)
@@ -304,13 +297,13 @@ module CloudinaryHelper
   end
 
   def cl_signed_download_url(public_id, options = {})
-    Cloudinary::Utils.signed_download_url(public_id, options)
+    Cloudinary::Utils.cloudinary_url(public_id, options)
   end
 
   def self.included(base)
     ActionView::Helpers::FormBuilder.send(:include, Cloudinary::FormBuilder)
     base.class_eval do
-      if !method_defined?(:image_tag)
+      unless method_defined?(:image_tag)
         include ActionView::Helpers::AssetTagHelper
       end
       alias_method :image_tag_without_cloudinary, :image_tag unless public_method_defined? :image_tag_without_cloudinary
@@ -325,7 +318,6 @@ module CloudinaryHelper
   private
 
   def cloudinary_url_internal(source, options = {})
-    options[:ssl_detected] = request.ssl? if defined?(request) && request && request.respond_to?(:ssl?)
     if defined?(CarrierWave::Uploader::Base) && source.is_a?(CarrierWave::Uploader::Base)
       if source.version_name.present?
         options[:transformation] = Cloudinary::Utils.build_array(source.transformation) + Cloudinary::Utils.build_array(options[:transformation])

@@ -17,7 +17,9 @@ module CloudinaryHelper
   alias cloudinary_url_internal_original cloudinary_url_internal
 
   def cloudinary_url_internal(source, options = {})
-    source = ActiveStorage::Blob.service.public_id(source) if defined? ActiveStorage::Blob.service.public_id
+    if defined?(ActiveStorage::Blob.service.public_id) && options.fetch(:type, "").to_s != "fetch"
+      source = ActiveStorage::Blob.service.public_id(source)
+    end
     cloudinary_url_internal_original(source, options)
   end
 end
@@ -39,10 +41,12 @@ module ActiveStorage
         begin
           extra_headers = checksum.nil? ? {} : {Headers::CONTENT_MD5 => checksum}
           options = @options.merge(options)
+          resource_type = resource_type(io, key)
+          options[:format] = ext_for_file(key) if resource_type == "raw"
           Cloudinary::Uploader.upload_large(
             io,
             public_id: public_id_internal(key),
-            resource_type: resource_type(io, key),
+            resource_type: resource_type,
             context: {active_storage_key: key, checksum: checksum},
             extra_headers: extra_headers,
             **options
@@ -56,7 +60,7 @@ module ActiveStorage
     def url(key, filename: nil, content_type: '', **options)
       instrument :url, key: key do |payload|
         url = Cloudinary::Utils.cloudinary_url(
-          full_public_id_internal(key),
+          full_public_id_internal(key, options),
           resource_type: resource_type(nil, key, content_type),
           format: ext_for_file(key, filename, content_type),
           **@options.merge(options.symbolize_keys)
@@ -149,7 +153,7 @@ module ActiveStorage
 
     # Return the partial content in the byte +range+ of the file at the +key+.
     def download_chunk(key, range)
-      url = Cloudinary::Utils.unsigned_download_url(public_id(key), resource_type: resource_type(nil, key))
+      url = Cloudinary::Utils.cloudinary_url(public_id(key), resource_type: resource_type(nil, key))
       uri = URI(url)
       instrument :download, key: key do
         req = Net::HTTP::Get.new(uri)
@@ -229,10 +233,12 @@ module ActiveStorage
     end
 
     # Returns the full public id including folder.
-    def full_public_id_internal(key)
+    def full_public_id_internal(key, options = {})
       public_id = public_id_internal(key)
 
-      return public_id unless @options[:folder]
+      options = @options.merge(options)
+
+      return public_id if !options[:folder] || options.fetch(:type).to_s == "fetch"
 
       File.join(@options.fetch(:folder), public_id)
     end

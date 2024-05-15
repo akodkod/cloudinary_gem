@@ -1,10 +1,6 @@
 # Copyright Cloudinary
-if RUBY_VERSION > "2"
-  require "ostruct"
-else
-  require "cloudinary/ostruct2"
-end
 
+require "ostruct"
 require "pathname"
 require "yaml"
 require "uri"
@@ -29,11 +25,9 @@ module Cloudinary
   autoload :CarrierWave, "cloudinary/carrier_wave"
   autoload :Search, "cloudinary/search"
   autoload :SearchFolders, "cloudinary/search_folders"
+  autoload :Analytics, "cloudinary/analytics"
 
-  CF_SHARED_CDN         = "d3jpl91pxevbkh.cloudfront.net"
-  AKAMAI_SHARED_CDN     = "res.cloudinary.com"
-  OLD_AKAMAI_SHARED_CDN = "cloudinary-a.akamaihd.net"
-  SHARED_CDN            = AKAMAI_SHARED_CDN
+  SHARED_CDN      = "res.cloudinary.com"
 
   USER_AGENT      = "CloudinaryRuby/#{VERSION} (Ruby #{RUBY_VERSION}-p#{RUBY_PATCHLEVEL})"
   @@user_platform = defined?(Rails.version) ? "Rails/#{Rails.version}" : ""

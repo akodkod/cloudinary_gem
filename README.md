@@ -40,11 +40,13 @@ the [Ruby on Rails SDK Guide](https://cloudinary.com/documentation/rails_integra
 
 | SDK Version | Ruby 1.9.3 | Ruby 2.x | Ruby 3.x |
 |-------------|------------|----------|----------|
-| 1.x         | v          | v        | v        |
+| 1.x         | ✔          | ✔        | ✔        |
+| 2.x         | ✘          | ✘        | ✔        |
 
 | SDK Version | Rails 5.x | Rails 6.x | Rails 7.x |
 |-------------|-----------|-----------|-----------|
-| 1.x         | v         | v         | v         |
+| 1.x         | ✔         | ✔         | ✔         |
+| 2.x         | ✘         | ✔         | ✔         |
 
 ## Installation
 
@@ -64,7 +66,7 @@ require 'cloudinary'
 - [See full documentation](https://cloudinary.com/documentation/rails_image_manipulation).
 
 ```ruby
- cl_image_tag("sample.jpg", :width => 100, :height => 150, :crop => :fill)
+ cl_image_tag("sample.jpg", width: 100, height: 150, crop: "fill")
 ```
 
 ### Upload

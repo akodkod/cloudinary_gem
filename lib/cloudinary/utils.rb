@@ -4,15 +4,14 @@
 require 'digest/sha1'
 require 'zlib'
 require 'uri'
-require 'aws_cf_signer'
 require 'json'
 require 'cgi'
+require 'faraday'
+require 'faraday/multipart'
 require 'cloudinary/auth_token'
 require 'cloudinary/responsive'
 
 class Cloudinary::Utils
-  # @deprecated Use Cloudinary::SHARED_CDN
-  SHARED_CDN = Cloudinary::SHARED_CDN
   MODE_DOWNLOAD = "download"
   DEFAULT_RESPONSIVE_WIDTH_TRANSFORMATION = {:width => :auto, :crop => :limit}
   CONDITIONAL_OPERATORS = {
@@ -98,7 +97,6 @@ class Cloudinary::Utils
       secure_distribution
       shorten
       sign_url
-      ssl_detected
       type
       url_suffix
       use_root_path
@@ -513,7 +511,7 @@ class Cloudinary::Utils
   end
 
   # Warning: options are being destructively updated!
-  def self.unsigned_download_url(source, options = {})
+  def self.cloudinary_url(source, options = {})
 
     patch_fetch_format(options)
     type = options.delete(:type)
@@ -530,7 +528,6 @@ class Cloudinary::Utils
 
     sign_url = config_option_consume(options, :sign_url)
     secret = config_option_consume(options, :api_secret)
-    sign_version = config_option_consume(options, :sign_version) # Deprecated behavior
     url_suffix = options.delete(:url_suffix)
     use_root_path = config_option_consume(options, :use_root_path)
     auth_token = config_option_consume(options, :auth_token)
@@ -578,7 +575,7 @@ class Cloudinary::Utils
     transformation = transformation.gsub(%r(([^:])//), '\1/')
     if sign_url && ( !auth_token || auth_token.empty?)
       raise(CloudinaryException, "Must supply api_secret") if (secret.nil? || secret.empty?)
-      to_sign = [transformation, sign_version && version, source_to_sign].reject(&:blank?).join("/")
+      to_sign = [transformation, source_to_sign].reject(&:blank?).join("/")
       to_sign = fully_unescape(to_sign)
       signature_algorithm = long_url_signature ? ALGO_SHA256 : signature_algorithm
       hash = hash("#{to_sign}#{secret}", signature_algorithm)
@@ -590,12 +587,22 @@ class Cloudinary::Utils
     prefix = build_distribution_domain(options)
 
     source = [prefix, resource_type, type, signature, transformation, version, source].reject(&:blank?).join("/")
+
+    token = nil
     if sign_url && auth_token && !auth_token.empty?
       auth_token[:url] = URI.parse(source).path
       token = Cloudinary::AuthToken.generate auth_token
-      source += "?#{token}"
     end
 
+    analytics = config_option_consume(options, :analytics, true)
+    analytics_token = nil
+    if analytics && ! original_source.include?("?") # Disable analytics for public IDs containing query params.
+      analytics_token = Cloudinary::Analytics.sdk_analytics_query_param
+    end
+
+    query_params = [token, analytics_token].compact.join("&")
+
+    source += "?#{query_params}" unless query_params.empty?
     source
   end
 
@@ -678,7 +685,7 @@ class Cloudinary::Utils
     shared_domain = !private_cdn
 
     if secure
-      if secure_distribution.nil? || secure_distribution == Cloudinary::OLD_AKAMAI_SHARED_CDN
+      if secure_distribution.nil?
         secure_distribution = private_cdn ? "#{cloud_name}-res.cloudinary.com" : Cloudinary::SHARED_CDN
       end
       shared_domain ||= secure_distribution == Cloudinary::SHARED_CDN
@@ -705,9 +712,7 @@ class Cloudinary::Utils
     cloud_name = config_option_consume(options, :cloud_name) || raise(CloudinaryException, "Must supply cloud_name in tag or in configuration")
 
     source = options.delete(:source)
-    secure = options.delete(:secure)
-    ssl_detected = options.delete(:ssl_detected)
-    secure = ssl_detected || Cloudinary.config.secure if secure.nil?
+    secure = config_option_consume(options, :secure, true)
     private_cdn = config_option_consume(options, :private_cdn)
     secure_distribution = config_option_consume(options, :secure_distribution)
     cname = config_option_consume(options, :cname)
@@ -726,8 +731,9 @@ class Cloudinary::Utils
   def self.base_api_url(path, options = {})
     cloudinary = options[:upload_prefix] || Cloudinary.config.upload_prefix || UPLOAD_PREFIX
     cloud_name = options[:cloud_name] || Cloudinary.config.cloud_name || raise(CloudinaryException, 'Must supply cloud_name')
+    api_version = options[:api_version] || Cloudinary.config.api_version || 'v1_1'
 
-    [cloudinary, 'v1_1', cloud_name, path].join('/')
+    [cloudinary, api_version, cloud_name, path].join('/')
   end
 
   def self.cloudinary_api_url(action = 'upload', options = {})
@@ -796,14 +802,6 @@ class Cloudinary::Utils
     return Cloudinary::Utils.cloudinary_api_url("download", options) + "?" + hash_query_params(cloudinary_params)
   end
 
-  # Utility method that uses the deprecated ZIP download API.
-  # @deprecated Replaced by {download_zip_url} that uses the more advanced and robust archive generation and download API
-  def self.zip_download_url(tag, options = {})
-    warn "zip_download_url is deprecated. Please use download_zip_url instead."
-    cloudinary_params = sign_request({:timestamp=>Time.now.to_i, :tag=>tag, :transformation=>generate_transformation_string(options)}, options)
-    return Cloudinary::Utils.cloudinary_api_url("download_tag.zip", options) + "?" + hash_query_params(cloudinary_params)
-  end
-
   # Returns a URL that when invokes creates an archive and returns it.
   # @param options [Hash]
   # @option options [String|Symbol] :resource_type  The resource type of files to include in the archive. Must be one of :image | :video | :raw
@@ -851,31 +849,6 @@ class Cloudinary::Utils
     resource_type = options[:resource_type] || "all"
 
     download_archive_url(options.merge(:resource_type => resource_type, :prefixes => folder_path))
-  end
-
-  def self.signed_download_url(public_id, options = {})
-    aws_private_key_path = options[:aws_private_key_path] || Cloudinary.config.aws_private_key_path
-    if aws_private_key_path
-      aws_key_pair_id = options[:aws_key_pair_id] || Cloudinary.config.aws_key_pair_id || raise(CloudinaryException, "Must supply aws_key_pair_id")
-      authenticated_distribution = options[:authenticated_distribution] || Cloudinary.config.authenticated_distribution || raise(CloudinaryException, "Must supply authenticated_distribution")
-      @signers ||= Hash.new{|h,k| path, id = k; h[k] = AwsCfSigner.new(path, id)}
-      signer = @signers[[aws_private_key_path, aws_key_pair_id]]
-      url = Cloudinary::Utils.unsigned_download_url(public_id, {:type=>:authenticated}.merge(options).merge(:secure=>true, :secure_distribution=>authenticated_distribution, :private_cdn=>true))
-      expires_at = options[:expires_at] || (Time.now+3600)
-      return signer.sign(url, :ending => expires_at)
-    else
-      return Cloudinary::Utils.unsigned_download_url( public_id, options)
-    end
-
-  end
-
-  def self.cloudinary_url(public_id, options = {})
-    if options[:type].to_s == 'authenticated' && !options[:sign_url]
-      result = signed_download_url(public_id, options)
-    else
-      result = unsigned_download_url(public_id, options)
-    end
-    return result
   end
 
   def self.asset_file_name(path)
@@ -1305,22 +1278,26 @@ class Cloudinary::Utils
   # Handles file parameter.
   #
   # @param [Pathname, StringIO, File, String, int, _ToPath] file
-  # @return [StringIO, File] A File object.
+  # @return [StringIO, File, String] A File object.
   #
   # @private
   def self.handle_file_param(file, options = {})
+    original_filename = options[:original_filename] || "cloudinaryfile"
+    content_type = options[:content_type] || "application/octet-stream"
     if file.is_a?(Pathname)
-      return File.open(file, "rb")
+      return Faraday::FilePart.new(file.to_s, content_type)
     elsif file.is_a?(Cloudinary::Blob)
-      return file
+      return Faraday::FilePart.new(file, file.content_type, file.original_filename)
     elsif file.is_a?(StringIO)
       file.rewind
-      return Cloudinary::Blob.new(file.read, options)
-    elsif file.respond_to?(:read) || Cloudinary::Utils.is_remote?(file)
-      return file
+      return Faraday::FilePart.new(file, content_type, original_filename)
+    elsif file.respond_to?(:read)
+      return Faraday::FilePart.new(file, content_type, original_filename)
+    elsif Cloudinary::Utils.is_remote?(file)
+      return file.to_s
     end
-
-    File.open(file, "rb")
+    # we got file path
+    Faraday::FilePart.new(file.to_s, content_type)
   end
 
   # The returned url should allow downloading the backedup asset based on the version and asset id
