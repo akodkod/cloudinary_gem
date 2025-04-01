@@ -543,16 +543,14 @@ describe Cloudinary::Api do
                 [:payload, :name] => "new_preset",
                 [:payload, :folder] => "some_folder",
                 [:payload, :eval] => EVAL_STR,
-                [:payload, :on_success] => ON_SUCCESS_STR,
-                [:payload, :live] => true}
+                [:payload, :on_success] => ON_SUCCESS_STR}
 
 
     res = @mock_api.create_upload_preset(:name       => "new_preset",
                                          :folder     => "some_folder",
                                          :eval       => EVAL_STR,
                                          :on_success => ON_SUCCESS_STR,
-                                         :tags       => [TEST_TAG, TIMESTAMP_TAG],
-                                         :live       => true)
+                                         :tags       => [TEST_TAG, TIMESTAMP_TAG])
     expect(res).to have_deep_hash_values_of(expected)
   end
 
@@ -594,8 +592,7 @@ describe Cloudinary::Api do
                                                              :unsigned => true,
                                                              :disallow_public_id => true,
                                                              :eval => EVAL_STR,
-                                                             :on_success => ON_SUCCESS_STR,
-                                                             :live => true))
+                                                             :on_success => ON_SUCCESS_STR))
     preset = @api.upload_preset(name)
     expect(preset["name"]).to eq(name)
     expect(preset["unsigned"]).to eq(true)
@@ -604,8 +601,7 @@ describe Cloudinary::Api do
                                      "disallow_public_id" => true,
                                      "eval" => EVAL_STR,
                                      "on_success" => ON_SUCCESS_STR,
-                                     "tags" => [TEST_TAG, TIMESTAMP_TAG],
-                                     "live" => true)
+                                     "tags" => [TEST_TAG, TIMESTAMP_TAG])
   end
 
   # this test must be last because it deletes (potentially) all dependent transformations which some tests rely on. Excluded by default.
@@ -719,6 +715,25 @@ describe Cloudinary::Api do
 
       result = @api.usage
       expect(result).to be_a_usage_result
+    end
+  end
+
+  describe 'config' do
+    let(:cloud_name) { Cloudinary.config.cloud_name }
+
+    it 'should return the correct cloud name' do
+      res = @api.config
+      expect(res['cloud_name']).to eq(cloud_name)
+    end
+
+    it 'should not include settings by default' do
+      res = @api.config
+      expect(res).not_to have_key('settings')
+    end
+
+    it 'should include settings when requested' do
+      res = @api.config(settings: 'true')
+      expect(res).to have_key('settings')
     end
   end
 

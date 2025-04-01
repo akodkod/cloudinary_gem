@@ -1,3 +1,33 @@
+2.3.0 / 2025-02-20
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for `429 Too Many Requests` HTTP status code
+  * Add support for `allow_dynamic_list_values` parameter in `MetadataField`
+  * Add support for `config` Admin API
+
+2.2.0 / 2024-09-08
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for ActiveStorage model service configuration
+
+Other Changes
+-------------
+
+  * Fix asset type detection in ActiveStorage
+  * Add explicit `ostruct` dependency
+
+2.1.2 / 2024-08-18
+==================
+
+  * Fix ActiveStorage type detection for email files
+  * Add `changelog_uri` to `gemspec`
+
 2.1.1 / 2024-05-28
 ==================
 

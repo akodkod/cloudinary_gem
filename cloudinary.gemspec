@@ -13,6 +13,10 @@ Gem::Specification.new do |s|
   s.summary     = %q{Client library for easily using the Cloudinary service}
   s.description = %q{Client library for easily using the Cloudinary service}
 
+  s.metadata = {
+    "changelog_uri" => "https://github.com/cloudinary/cloudinary_gem/blob/master/CHANGELOG.md"
+  }
+
   s.files         = `git ls-files`.split("\n").select { |f| !f.start_with?("test", "spec", "features", "samples") } +
     Dir.glob("vendor/assets/javascripts/*/*") + Dir.glob("vendor/assets/html/*")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
@@ -23,6 +27,7 @@ Gem::Specification.new do |s|
   s.add_dependency "faraday", ">= 2.0.1", "< 3.0.0"
   s.add_dependency "faraday-multipart", "~> 1.0", ">= 1.0.4"
   s.add_dependency 'faraday-follow_redirects', '~> 0.3.0'
+  s.add_dependency "ostruct"
 
   s.add_development_dependency "rails", ">= 6.1.7", "< 8.0.0"
   s.add_development_dependency "rexml", ">= 3.2.5", "< 4.0.0"

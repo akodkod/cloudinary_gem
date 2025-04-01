@@ -14,6 +14,22 @@ class Cloudinary::Api
     call_api(:get, "ping", {}, options)
   end
 
+  # Retrieves account configuration details.
+  #
+  # @param [Hash] options The optional parameters.
+  #
+  # @return [Cloudinary::Api::Response]
+  #
+  # @raise [Cloudinary::Api::Error]
+  #
+  # @see https://cloudinary.com/documentation/admin_api#config
+  def self.config(options={})
+    uri = "config"
+    params = only(options, :settings)
+
+    call_api(:get, uri, params, options)
+  end
+
   # Gets cloud usage details.
   #
   # Returns a report detailing your current Cloudinary cloud usage details, including
@@ -1021,9 +1037,7 @@ class Cloudinary::Api
   #
   # @see https://cloudinary.com/documentation/admin_api#create_a_metadata_field
   def self.add_metadata_field(field, options = {})
-    params = only(field, :type, :external_id, :label, :mandatory, :default_value, :validation, :datasource)
-
-    call_metadata_api(:post, [], params, options)
+    call_metadata_api(:post, [], prepare_metadata_field_params(field), options)
   end
 
   # Updates a metadata field by external ID.
@@ -1040,10 +1054,19 @@ class Cloudinary::Api
   #
   # @see https://cloudinary.com/documentation/admin_api#update_a_metadata_field_by_external_id
   def self.update_metadata_field(field_external_id, field, options = {})
-    uri = [field_external_id]
-    params = only(field, :label, :mandatory, :default_value, :validation)
+    uri    = [field_external_id]
 
-    call_metadata_api(:put, uri, params, options)
+    call_metadata_api(:put, uri, prepare_metadata_field_params(field), options)
+  end
+
+  # Prepares optional parameters for add/update_metadata_field API calls.
+  # @param  [Hash]   options Additional options
+  # @return [Object]         Optional parameters
+  def self.prepare_metadata_field_params(field)
+    only(field,
+         :type, :external_id, :label, :mandatory, :restrictions, :default_value, :default_disabled,
+         :validation, :datasource, :allow_dynamic_list_values
+    )
   end
 
   # Deletes a metadata field definition by external ID.

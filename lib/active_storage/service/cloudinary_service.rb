@@ -17,9 +17,13 @@ module CloudinaryHelper
   alias cloudinary_url_internal_original cloudinary_url_internal
 
   def cloudinary_url_internal(source, options = {})
-    if defined?(ActiveStorage::Blob.service.public_id) && options.fetch(:type, "").to_s != "fetch"
-      source = ActiveStorage::Blob.service.public_id(source)
+    service_instance, options = ActiveStorage::Service::CloudinaryService.fetch_service_instance_and_config(source, options)
+    service_instance ||= ActiveStorage::Blob.service
+
+    if defined?(service_instance.public_id) && options.fetch(:type, "").to_s != "fetch"
+      source = service_instance.public_id(source)
     end
+
     cloudinary_url_internal_original(source, options)
   end
 end
@@ -58,6 +62,7 @@ module ActiveStorage
     end
 
     def url(key, filename: nil, content_type: '', **options)
+      key = find_blob_or_use_key(key)
       instrument :url, key: key do |payload|
         url = Cloudinary::Utils.cloudinary_url(
           full_public_id_internal(key, options),
@@ -101,6 +106,7 @@ module ActiveStorage
     end
 
     def delete(key)
+      key = find_blob_or_use_key(key)
       instrument :delete, key: key do
         options = {
           resource_type: resource_type(nil, key),
@@ -117,6 +123,7 @@ module ActiveStorage
     end
 
     def exist?(key)
+      key = find_blob_or_use_key(key)
       instrument :exist, key: key do |payload|
         begin
           options = {
@@ -153,8 +160,7 @@ module ActiveStorage
 
     # Return the partial content in the byte +range+ of the file at the +key+.
     def download_chunk(key, range)
-      url = Cloudinary::Utils.cloudinary_url(public_id(key), resource_type: resource_type(nil, key))
-      uri = URI(url)
+      uri = URI(url(key))
       instrument :download, key: key do
         req = Net::HTTP::Get.new(uri)
         range_end = case
@@ -188,6 +194,33 @@ module ActiveStorage
       end
 
       full_public_id_internal(public_id)
+    end
+
+    def self.fetch_service_instance_and_config(source, options)
+      return [nil, options] unless defined?(ActiveStorage::BlobKey) && source.is_a?(ActiveStorage::BlobKey) &&
+        source.respond_to?(:attributes) && source.attributes.key?(:service_name)
+
+      service_name = source.attributes[:service_name]
+
+      begin
+        service_instance = ActiveStorage::Blob.services.fetch(service_name.to_sym)
+
+        unless service_instance.instance_of?(ActiveStorage::Service::CloudinaryService)
+          Rails.logger.error "Expected service instance #{service_instance.class.name} to be of type ActiveStorage::Service::CloudinaryService."
+          return [nil, options]
+        end
+
+        service_config = Rails.application.config.active_storage.service_configurations.fetch(service_name)
+        options        = service_config.merge(options)
+      rescue NameError => e
+        Rails.logger.error "Failed to retrieve the service instance for #{service_name}: #{e.message}"
+        return [nil, options]
+      rescue => e
+        Rails.logger.error "An unexpected error occurred: #{e.message}"
+        return [nil, options]
+      end
+
+      [service_instance, options]
     end
 
     private
@@ -278,6 +311,20 @@ module ActiveStorage
         content_type = options[:content_type] || (io.nil? ? '' : Marcel::MimeType.for(io))
       end
       content_type_to_resource_type(content_type)
+    end
+
+    def find_blob_or_use_key(key)
+      if key.is_a?(ActiveStorage::BlobKey)
+        key
+      else
+        begin
+          blob = ActiveStorage::Blob.find_by(key: key)
+          blob ? ActiveStorage::BlobKey.new(blob.attributes.as_json) : key
+        rescue ActiveRecord::StatementInvalid => e
+          # Return the original key if an error occurs
+          key
+        end
+      end
     end
   end
 end
