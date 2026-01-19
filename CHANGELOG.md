@@ -1,3 +1,33 @@
+2.4.3 / 2025-12-28
+==================
+
+  * Update `faraday-follow_redirects` to `~> 0.5`
+
+2.4.2 / 2025-12-25
+==================
+
+* Update `faraday-follow_redirects` to `~> 0.4.0`
+
+2.4.1 / 2025-12-23
+==================
+
+  * Fix Ruby 4 compatibility
+
+2.4.0 / 2025-08-31
+==================
+
+New functionality and features
+------------------------------
+
+  * Add support for providing upload parameters in CarrierWave
+
+2.3.1 / 2025-06-17
+==================
+
+  * Fix API parameters signature
+  * Allow passing tag attributes for `cloudinary_js_config` tag
+  * Fix `Cloudinary::Uploader.exists?` method
+
 2.3.0 / 2025-02-20
 ==================
 

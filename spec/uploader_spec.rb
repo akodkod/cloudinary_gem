@@ -608,6 +608,15 @@ describe Cloudinary::Uploader do
     end
   end
 
+  it "should correctly report resource existence" do
+    upload_res = Cloudinary::Uploader.upload(TEST_IMG, :tags => [TEST_TAG, TIMESTAMP_TAG])
+    public_id  = upload_res["public_id"]
+
+    expect(Cloudinary::Uploader.exists?(public_id)).to be true
+    expect(Cloudinary::Uploader.exists?("non_existing_resource_#{UNIQUE_TEST_ID}")).to be false
+  end
+
+
   describe ":timeout" do
     before do
       @timeout = Cloudinary.config.timeout
@@ -618,7 +627,9 @@ describe Cloudinary::Uploader do
     end
 
     it "should fail if timeout is reached" do
-      expect { Cloudinary::Uploader.upload(Pathname.new(TEST_IMG), :tags => [TEST_TAG, TIMESTAMP_TAG]) }.to raise_error(Faraday::ConnectionFailed)
+      expect { Cloudinary::Uploader.upload(Pathname.new(TEST_IMG), :tags => [TEST_TAG, TIMESTAMP_TAG]) }.to raise_error { |error|
+        expect([Faraday::ConnectionFailed, Faraday::TimeoutError]).to include(error.class)
+      }
     end
 
     it "should allow passing nil value" do
@@ -754,5 +765,32 @@ describe Cloudinary::Uploader do
     expect(result["url"]).to include("w_0.5")
     expect(pdf_result["url"]).to include("w_111")
     expect(pdf_result["url"]).to end_with(".pdf")
+  end
+
+  describe "signature_version parameter support" do
+    it "should use signature_version from config when not specified" do
+      original_signature_version = Cloudinary.config.signature_version
+      Cloudinary.config.signature_version = 1
+
+      begin
+        # Test that configuration signature_version affects signing
+        upload_result = Cloudinary::Uploader.upload(TEST_IMG, :tags => [TEST_TAG, TIMESTAMP_TAG])
+        public_id = upload_result["public_id"]
+        version = upload_result["version"]
+
+        # Verify the signature was created with version 1
+        expected_signature_v1 = Cloudinary::Utils.api_sign_request(
+          { :public_id => public_id, :version => version },
+          Cloudinary.config.api_secret,
+          nil,
+          1
+        )
+
+        expect(upload_result["signature"]).to eq(expected_signature_v1)
+      ensure
+        # Reset config to original value
+        Cloudinary.config.signature_version = original_signature_version
+      end
+    end
   end
 end
